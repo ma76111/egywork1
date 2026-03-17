@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: ./backend
+    container_name: egywork-backend
+    restart: always
+    environment:
+      - PORT=5000
+      - JWT_SECRET=egywork_egypt_2026_super_secret
+    volumes:
+      - db_data:/app/egywork.db
+
+  frontend:
+    build: ./frontend
+    container_name: egywork-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
