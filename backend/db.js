@@ -17,6 +17,8 @@ db.exec(`
     referral_code TEXT UNIQUE,
     referred_by INTEGER,
     is_verified INTEGER DEFAULT 0,
+    email_verified INTEGER DEFAULT 0,
+    phone_verified INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -56,6 +58,17 @@ db.exec(`
     method TEXT, -- fawry | vodafone_cash | instapay | bank
     reference TEXT,
     note TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS otp_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    code TEXT NOT NULL,
+    type TEXT NOT NULL, -- email | phone
+    expires_at DATETIME NOT NULL,
+    used INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );

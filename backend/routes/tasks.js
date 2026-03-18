@@ -118,4 +118,13 @@ router.patch('/submissions/:subId', authMiddleware, (req, res) => {
   res.json({ message: status === 'approved' ? 'تم القبول ودفع المكافأة' : 'تم الرفض' });
 });
 
+// إيقاف أو تشغيل مهمة (معلن)
+router.patch('/:id/status', authMiddleware, (req, res) => {
+  const { status } = req.body;
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ? AND advertiser_id = ?').get(req.params.id, req.user.id);
+  if (!task) return res.status(403).json({ message: 'غير مسموح' });
+  db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run(status, task.id);
+  res.json({ message: 'تم التحديث' });
+});
+
 module.exports = router;

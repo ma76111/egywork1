@@ -11,6 +11,9 @@ import TaskDetail from './pages/TaskDetail';
 import PostTask from './pages/PostTask';
 import Finance from './pages/Finance';
 import AdminPanel from './pages/AdminPanel';
+import Settings from './pages/Settings';
+import Verify from './pages/Verify';
+import AdvertiserDashboard from './pages/AdvertiserDashboard';
 import MySubmissions from './pages/MySubmissions';
 
 function PrivateRoute({ children, role }) {
@@ -35,6 +38,9 @@ function AppRoutes() {
         <Route path="/post-task" element={<PrivateRoute><PostTask /></PrivateRoute>} />
         <Route path="/finance" element={<PrivateRoute><Finance /></PrivateRoute>} />
         <Route path="/my-submissions" element={<PrivateRoute><MySubmissions /></PrivateRoute>} />
+        <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+        <Route path="/verify" element={<PrivateRoute><Verify /></PrivateRoute>} />
+        <Route path="/advertiser" element={<PrivateRoute><AdvertiserDashboard /></PrivateRoute>} />
         <Route path="/admin" element={<PrivateRoute role="admin"><AdminPanel /></PrivateRoute>} />
       </Routes>
     </>
