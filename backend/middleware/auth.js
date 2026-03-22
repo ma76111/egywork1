@@ -13,7 +13,7 @@ function authMiddleware(req, res, next) {
 }
 
 function adminOnly(req, res, next) {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'غير مسموح' });
+  if (req.user?.role !== 'admin') return res.status(403).json({ message: 'غير مسموح' });
   next();
 }
 

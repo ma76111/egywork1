@@ -1,9 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
-const db = require('./db');
 const app = express();
 
 app.use(cors());
@@ -15,28 +12,7 @@ app.use('/api/finance', require('./routes/finance'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/verify', require('./routes/verify'));
 
-// Auto-seed admin account on first run
-async function seedAdmin() {
-  try {
-    const existing = await db.query("SELECT id FROM users WHERE email = 'admin@egywork.com'");
-    if (existing.rows[0]) {
-      console.log('ℹ️  Admin account already exists');
-      return;
-    }
-    const hashed = bcrypt.hashSync('admin123', 10);
-    const code = uuidv4().slice(0, 8).toUpperCase();
-    await db.query(
-      'INSERT INTO users (name, email, phone, password, role, referral_code, balance) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-      ['الأدمن', 'admin@egywork.com', '01000000000', hashed, 'admin', code, 10000]
-    );
-    console.log('✅ Admin account created: admin@egywork.com / admin123');
-  } catch (e) {
-    console.error('❌ Seed error:', e.message || e);
-    console.error('❌ Seed stack:', e.stack);
-  }
-}
-
-// Register Telegram webhook
+// تسجيل Telegram webhook تلقائياً عند التشغيل
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const APP_URL = process.env.APP_URL;
 if (TELEGRAM_TOKEN && APP_URL) {
@@ -44,30 +20,11 @@ if (TELEGRAM_TOKEN && APP_URL) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: `${APP_URL}/api/verify/telegram-webhook` }),
-  })
-    .then(r => r.json())
-    .then(d => console.log('Telegram webhook:', d.description))
+  }).then(r => r.json()).then(d => console.log('Telegram webhook:', d.description))
     .catch(e => console.error('Telegram webhook error:', e.message));
 }
 
-// Health check
-app.get('/', (req, res) => res.json({ message: 'EgyWork API يعمل بنجاح', time: new Date().toISOString() }));
-
-// DB health check endpoint
-app.get('/health', async (req, res) => {
-  try {
-    await db.query('SELECT 1');
-    res.json({ status: 'ok', db: 'connected' });
-  } catch (e) {
-    res.status(500).json({ status: 'error', db: e.message });
-  }
-});
+app.get('/', (req, res) => res.json({ message: 'EgyWork API يعمل بنجاح' }));
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, async () => {
-  console.log(`✅ Server running on port ${PORT}`);
-  console.log(`📦 NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🗄️  DATABASE_URL set: ${!!process.env.DATABASE_URL}`);
-  // Wait 3s for DB init to complete then seed
-  setTimeout(seedAdmin, 3000);
-});
+app.listen(PORT, () => console.log(`✅ الخادم يعمل على المنفذ ${PORT}`));

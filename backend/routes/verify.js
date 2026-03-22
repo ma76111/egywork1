@@ -7,134 +7,79 @@ const { sendTelegramMessage, BOT_USERNAME } = require('../services/telegram');
 
 function generateOTP() { return Math.floor(100000 + Math.random() * 900000).toString(); }
 
-// Helper: fetch user by id, returns null if not found
-async function getUser(id) {
-  const r = await db.query('SELECT * FROM users WHERE id = $1', [id]);
-  return r.rows[0] || null;
-}
-
-router.get('/status', authMiddleware, async (req, res) => {
-  try {
-    const user = await getUser(req.user.id);
-    if (!user) return res.status(404).json({ message: 'user not found' });
-    const tg = await db.query('SELECT id FROM telegram_links WHERE user_id = $1', [req.user.id]);
-    res.json({
-      email_verified: user.email_verified,
-      phone_verified: user.phone_verified,
-      telegram_linked: tg.rows.length > 0,
-    });
-  } catch (e) { console.error(e); res.status(500).json({ message: 'error' }); }
+router.get('/status', authMiddleware, (req, res) => {
+  const user = db.prepare('SELECT email_verified, phone_verified FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ message: 'user not found' });
+  const tg = db.prepare('SELECT id FROM telegram_links WHERE user_id = ?').get(req.user.id);
+  res.json({ ...user, telegram_linked: !!tg });
 });
 
 router.post('/send-email', authMiddleware, async (req, res) => {
   try {
-    const user = await getUser(req.user.id);
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
     if (!user) return res.status(404).json({ message: 'user not found' });
     if (user.email_verified) return res.status(400).json({ message: 'already verified' });
-    await db.query('DELETE FROM otp_codes WHERE user_id = $1 AND type = $2', [req.user.id, 'email']);
+    db.prepare('DELETE FROM otp_codes WHERE user_id = ? AND type = ?').run(req.user.id, 'email');
     const code = generateOTP();
-    const expires = new Date(Date.now() + 10 * 60 * 1000);
-    await db.query(
-      'INSERT INTO otp_codes (user_id, code, type, expires_at) VALUES ($1,$2,$3,$4)',
-      [req.user.id, code, 'email', expires]
-    );
+    const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    db.prepare('INSERT INTO otp_codes (user_id, code, type, expires_at) VALUES (?,?,?,?)').run(req.user.id, code, 'email', expires);
     await sendVerificationEmail(user.email, code);
     res.json({ message: 'sent' });
   } catch (e) { console.error('send-email error:', e.message); res.status(500).json({ message: 'email failed' }); }
 });
 
-router.get('/telegram-link', authMiddleware, async (req, res) => {
-  try {
-    const user = await getUser(req.user.id);
-    if (!user) return res.status(404).json({ message: 'user not found' });
-    await db.query('DELETE FROM otp_codes WHERE user_id = $1 AND type = $2', [req.user.id, 'phone']);
-    const code = generateOTP();
-    const expires = new Date(Date.now() + 10 * 60 * 1000);
-    await db.query(
-      'INSERT INTO otp_codes (user_id, code, type, expires_at) VALUES ($1,$2,$3,$4)',
-      [req.user.id, code, 'phone', expires]
-    );
-    const botLink = 'https://t.me/' + BOT_USERNAME + '?start=' + code;
-    res.json({ botLink, code });
-  } catch (e) { console.error(e); res.status(500).json({ message: 'error' }); }
+router.get('/telegram-link', authMiddleware, (req, res) => {
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ message: 'user not found' });
+  db.prepare('DELETE FROM otp_codes WHERE user_id = ? AND type = ?').run(req.user.id, 'phone');
+  const code = generateOTP();
+  const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  db.prepare('INSERT INTO otp_codes (user_id, code, type, expires_at) VALUES (?,?,?,?)').run(req.user.id, code, 'phone', expires);
+  const botLink = `https://t.me/${BOT_USERNAME}?start=${code}`;
+  res.json({ botLink, code });
 });
 
-router.post('/confirm', authMiddleware, async (req, res) => {
-  try {
-    const { code, type } = req.body;
-    if (!code || !type) return res.status(400).json({ message: 'missing data' });
-    if (!['email', 'phone'].includes(type)) return res.status(400).json({ message: 'invalid type' });
-
-    const user = await getUser(req.user.id);
-    if (!user) return res.status(404).json({ message: 'user not found' });
-
-    const otpRes = await db.query(
-      `SELECT * FROM otp_codes
-       WHERE user_id = $1 AND code = $2 AND type = $3 AND used = 0
-       ORDER BY created_at DESC LIMIT 1`,
-      [req.user.id, code, type]
-    );
-    const otp = otpRes.rows[0];
-    if (!otp) return res.status(400).json({ message: 'invalid code' });
-    if (new Date(otp.expires_at) < new Date()) return res.status(400).json({ message: 'expired' });
-
-    await db.query('UPDATE otp_codes SET used = 1 WHERE id = $1', [otp.id]);
-
-    if (type === 'email') {
-      await db.query('UPDATE users SET email_verified = 1 WHERE id = $1', [req.user.id]);
-    } else {
-      await db.query('UPDATE users SET phone_verified = 1 WHERE id = $1', [req.user.id]);
-    }
-
-    res.json({ message: 'confirmed' });
-  } catch (e) { console.error(e); res.status(500).json({ message: 'error' }); }
+router.post('/confirm', authMiddleware, (req, res) => {
+  const { code, type } = req.body;
+  if (!code || !type) return res.status(400).json({ message: 'missing data' });
+  if (!['email', 'phone'].includes(type)) return res.status(400).json({ message: 'invalid type' });
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ message: 'user not found' });
+  const otp = db.prepare('SELECT * FROM otp_codes WHERE user_id = ? AND code = ? AND type = ? AND used = 0 ORDER BY created_at DESC LIMIT 1').get(req.user.id, code, type);
+  if (!otp) return res.status(400).json({ message: 'كود غير صحيح' });
+  if (new Date(otp.expires_at) < new Date()) return res.status(400).json({ message: 'انتهت صلاحية الكود' });
+  db.prepare('UPDATE otp_codes SET used = 1 WHERE id = ?').run(otp.id);
+  if (type === 'email') db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(req.user.id);
+  else db.prepare('UPDATE users SET phone_verified = 1 WHERE id = ?').run(req.user.id);
+  res.json({ message: 'confirmed' });
 });
 
 router.post('/telegram-webhook', async (req, res) => {
-  // Always respond 200 immediately so Telegram doesn't retry
   res.sendStatus(200);
   try {
     const msg = req.body && req.body.message;
     if (!msg || !msg.chat) return;
-
     const chatId = String(msg.chat.id);
     const text = (msg.text || '').trim();
-
     if (!text.startsWith('/start')) {
       await sendTelegramMessage(chatId, 'أرسل الرابط من موقع إيجي وورك للتحقق من حسابك.');
       return;
     }
-
-    const parts = text.split(' ');
-    const code = parts[1] && parts[1].trim();
+    const code = text.split(' ')[1]?.trim();
     if (!code) {
       await sendTelegramMessage(chatId, 'أرسل الرابط من موقع إيجي وورك للتحقق من حسابك.');
       return;
     }
-
-    const otpRes = await db.query(
-      `SELECT * FROM otp_codes
-       WHERE code = $1 AND type = $2 AND used = 0
-       ORDER BY created_at DESC LIMIT 1`,
-      [code, 'phone']
-    );
-    const otp = otpRes.rows[0];
-
+    const otp = db.prepare("SELECT * FROM otp_codes WHERE code = ? AND type = 'phone' AND used = 0 ORDER BY created_at DESC LIMIT 1").get(code);
     if (!otp || new Date(otp.expires_at) < new Date()) {
       await sendTelegramMessage(chatId, 'الكود غير صالح أو منتهي الصلاحية. جرب مرة أخرى من الموقع.');
       return;
     }
-
-    await db.query(
-      'INSERT INTO telegram_links (user_id, chat_id) VALUES ($1,$2) ON CONFLICT (user_id) DO UPDATE SET chat_id = $2',
-      [otp.user_id, chatId]
-    );
-    await db.query('UPDATE otp_codes SET used = 1 WHERE id = $1', [otp.id]);
-    await db.query('UPDATE users SET phone_verified = 1 WHERE id = $1', [otp.user_id]);
-
-    const userRes = await db.query('SELECT name FROM users WHERE id = $1', [otp.user_id]);
-    const name = userRes.rows[0] ? userRes.rows[0].name : '';
-    await sendTelegramMessage(chatId, `تم ربط حسابك بنجاح! أهلاً ${name} 🎉`);
+    db.prepare('INSERT OR REPLACE INTO telegram_links (user_id, chat_id) VALUES (?,?)').run(otp.user_id, chatId);
+    db.prepare('UPDATE otp_codes SET used = 1 WHERE id = ?').run(otp.id);
+    db.prepare('UPDATE users SET phone_verified = 1 WHERE id = ?').run(otp.user_id);
+    const user = db.prepare('SELECT name FROM users WHERE id = ?').get(otp.user_id);
+    await sendTelegramMessage(chatId, `تم ربط حسابك بنجاح! أهلاً ${user?.name || ''} 🎉`);
   } catch (e) { console.error('webhook error:', e.message); }
 });
 
