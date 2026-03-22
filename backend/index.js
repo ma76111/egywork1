@@ -19,7 +19,10 @@ app.use('/api/verify', require('./routes/verify'));
 async function seedAdmin() {
   try {
     const existing = await db.query("SELECT id FROM users WHERE email = 'admin@egywork.com'");
-    if (existing.rows[0]) return;
+    if (existing.rows[0]) {
+      console.log('ℹ️  Admin account already exists');
+      return;
+    }
     const hashed = bcrypt.hashSync('admin123', 10);
     const code = uuidv4().slice(0, 8).toUpperCase();
     await db.query(
@@ -28,11 +31,12 @@ async function seedAdmin() {
     );
     console.log('✅ Admin account created: admin@egywork.com / admin123');
   } catch (e) {
-    console.error('Seed error:', e.message);
+    console.error('❌ Seed error:', e.message || e);
+    console.error('❌ Seed stack:', e.stack);
   }
 }
 
-// تسجيل Telegram webhook تلقائياً عند التشغيل
+// Register Telegram webhook
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const APP_URL = process.env.APP_URL;
 if (TELEGRAM_TOKEN && APP_URL) {
@@ -40,14 +44,30 @@ if (TELEGRAM_TOKEN && APP_URL) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: `${APP_URL}/api/verify/telegram-webhook` }),
-  }).then(r => r.json()).then(d => console.log('Telegram webhook:', d.description));
+  })
+    .then(r => r.json())
+    .then(d => console.log('Telegram webhook:', d.description))
+    .catch(e => console.error('Telegram webhook error:', e.message));
 }
 
-app.get('/', (req, res) => res.json({ message: 'EgyWork API يعمل بنجاح' }));
+// Health check
+app.get('/', (req, res) => res.json({ message: 'EgyWork API يعمل بنجاح', time: new Date().toISOString() }));
+
+// DB health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    await db.query('SELECT 1');
+    res.json({ status: 'ok', db: 'connected' });
+  } catch (e) {
+    res.status(500).json({ status: 'error', db: e.message });
+  }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
-  console.log(`✅ الخادم يعمل على المنفذ ${PORT}`);
-  // Wait for DB init to complete then seed
-  setTimeout(seedAdmin, 2000);
+  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`📦 NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🗄️  DATABASE_URL set: ${!!process.env.DATABASE_URL}`);
+  // Wait 3s for DB init to complete then seed
+  setTimeout(seedAdmin, 3000);
 });
