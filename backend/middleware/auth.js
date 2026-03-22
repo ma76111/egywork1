@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'egywork_secret_2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'egywork_egypt_2026_super_secret';
 
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];

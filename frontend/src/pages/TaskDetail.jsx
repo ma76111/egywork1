@@ -8,17 +8,13 @@ export default function TaskDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [task, setTask] = useState(null);
+  const [task, setTask] = useState(undefined);
   const [proof, setProof] = useState('');
   const [loading, setLoading] = useState(false);
   const [submissions, setSubmissions] = useState([]);
 
   useEffect(() => {
-    api.get(`/tasks?`).then(r => {
-      const found = r.data.find(t => t.id == id);
-      setTask(found);
-    });
-    // If advertiser, load submissions
+    api.get(`/tasks/${id}`).then(r => setTask(r.data)).catch(() => setTask(null));
     if (user?.role === 'advertiser' || user?.role === 'admin') {
       api.get(`/tasks/${id}/submissions`).then(r => setSubmissions(r.data)).catch(() => {});
     }
@@ -47,6 +43,7 @@ export default function TaskDetail() {
     }
   };
 
+  if (task === null) return <div className="text-center py-20 text-gray-400">المهمة غير موجودة</div>;
   if (!task) return <div className="text-center py-20 text-gray-400">جاري التحميل...</div>;
 
   return (
