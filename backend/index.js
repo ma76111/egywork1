@@ -1,6 +1,9 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const { v4: uuidv4 } = require('uuid');
+const db = require('./db');
 const app = express();
 
 app.use(cors());
@@ -11,6 +14,23 @@ app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/finance', require('./routes/finance'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/verify', require('./routes/verify'));
+
+// Auto-seed admin account on first run
+async function seedAdmin() {
+  try {
+    const existing = await db.query("SELECT id FROM users WHERE email = 'admin@egywork.com'");
+    if (existing.rows[0]) return;
+    const hashed = bcrypt.hashSync('admin123', 10);
+    const code = uuidv4().slice(0, 8).toUpperCase();
+    await db.query(
+      'INSERT INTO users (name, email, phone, password, role, referral_code, balance) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      ['الأدمن', 'admin@egywork.com', '01000000000', hashed, 'admin', code, 10000]
+    );
+    console.log('✅ Admin account created: admin@egywork.com / admin123');
+  } catch (e) {
+    console.error('Seed error:', e.message);
+  }
+}
 
 // تسجيل Telegram webhook تلقائياً عند التشغيل
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -26,4 +46,8 @@ if (TELEGRAM_TOKEN && APP_URL) {
 app.get('/', (req, res) => res.json({ message: 'EgyWork API يعمل بنجاح' }));
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ الخادم يعمل على المنفذ ${PORT}`));
+app.listen(PORT, async () => {
+  console.log(`✅ الخادم يعمل على المنفذ ${PORT}`);
+  // Wait for DB init to complete then seed
+  setTimeout(seedAdmin, 2000);
+});
