@@ -2,13 +2,10 @@
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway')
+  ssl: process.env.DATABASE_URL
     ? { rejectUnauthorized: false }
     : false,
 });
-
-// Helper: run query
-pool.query = pool.query.bind(pool);
 
 // Initialize tables
 async function initDB() {
@@ -86,7 +83,7 @@ async function initDB() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
-  console.log('Database tables ready');
+  console.log('✅ Database tables ready');
 }
 
 initDB().catch(err => console.error('DB init error:', err.message));
