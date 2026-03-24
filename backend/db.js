@@ -1,16 +1,26 @@
 ﻿const { Pool } = require('pg');
 
-if (!process.env.DATABASE_URL) {
-  console.error('❌ FATAL: DATABASE_URL is not set. Go to Railway → backend service → Variables → add DATABASE_URL');
+// Support both DATABASE_URL and individual PG* variables (Railway injects these)
+let poolConfig;
+if (process.env.DATABASE_URL) {
+  poolConfig = { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } };
+} else if (process.env.PGHOST) {
+  poolConfig = {
+    host: process.env.PGHOST,
+    port: process.env.PGPORT || 5432,
+    database: process.env.PGDATABASE,
+    user: process.env.PGUSER,
+    password: process.env.PGPASSWORD,
+    ssl: { rejectUnauthorized: false },
+  };
+} else {
+  console.error('❌ FATAL: No database config found. Add DATABASE_URL or PG* variables to backend service.');
   process.exit(1);
 }
 
-console.log('✅ DATABASE_URL found, connecting...');
+console.log('✅ Database config found, connecting...');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
+const pool = new Pool(poolConfig);
 
 async function initDB() {
   await pool.query(`
