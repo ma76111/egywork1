@@ -1,12 +1,10 @@
-// Only load .env in development - don't override Railway's env vars
-if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config();
-}
+// dotenv only for local development
+try { require('dotenv').config(); } catch (_) {}
+
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
-const db = require('./db');
 const app = express();
 
 app.use(cors());
@@ -20,6 +18,7 @@ app.use('/api/verify', require('./routes/verify'));
 
 // Auto-seed admin on first run
 async function seedAdmin() {
+  const db = require('./db');
   try {
     const r = await db.query("SELECT id FROM users WHERE email = 'admin@egywork.com'");
     if (r.rows[0]) return;
