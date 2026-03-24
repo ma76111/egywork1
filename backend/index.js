@@ -1,4 +1,7 @@
-require('dotenv').config();
+// Only load .env in development - don't override Railway's env vars
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
