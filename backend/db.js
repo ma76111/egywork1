@@ -1,9 +1,11 @@
 ﻿const { Pool } = require('pg');
 
 if (!process.env.DATABASE_URL) {
-  console.error('❌ DATABASE_URL is not set');
+  console.error('❌ FATAL: DATABASE_URL is not set. Go to Railway → backend service → Variables → add DATABASE_URL');
   process.exit(1);
 }
+
+console.log('✅ DATABASE_URL found, connecting...');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
